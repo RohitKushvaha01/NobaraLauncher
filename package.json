@@ -5,7 +5,8 @@
   "scripts": {
     "start": "react-native start",
     "dev": "react-native run-android --no-packager",
-    "build": "npx react-native build-android"
+    "build:bundle": "npx react-native build-android --mode=release",
+    "build:apk": "npx react-native build-android --tasks assembleRelease"
   },
   "dependencies": {
     "@react-native/new-app-screen": "0.85.3",
