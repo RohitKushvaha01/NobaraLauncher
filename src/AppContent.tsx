@@ -3,7 +3,10 @@ import {
   NativeModules,
   Text,
   View,
-  ScrollView,
+  FlatList,
+  TouchableOpacity,
+  Image,
+  Dimensions,
 } from 'react-native';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 type AppInfo = {
   name: string;
   packageName: string;
+  iconUri: string;
 };
 
 export default function AppContent() {
@@ -41,35 +45,70 @@ export default function AppContent() {
 
   }, []);
 
+  const { width } = Dimensions.get('window');
+  const numColumns = 4;
+  const itemWidth = width / numColumns;
+
+  const renderItem = ({ item }: { item: AppInfo }) => (
+    <TouchableOpacity
+      style={{
+        width: itemWidth,
+        alignItems: 'center',
+        padding: 10,
+        justifyContent: 'center',
+      }}
+      onPress={() => {
+        const { AppsModule } = NativeModules;
+        AppsModule.launchApp(item.packageName).catch((err: any) => {
+          console.error('Failed to launch app:', err);
+        });
+      }}
+    >
+      {item.iconUri ? (
+        <Image
+          source={{ uri: `file://${item.iconUri}` }}
+          style={{ width: 50, height: 50, marginBottom: 5 }}
+          resizeMode="contain"
+        />
+      ) : (
+        <View style={{ width: 50, height: 50, marginBottom: 5, backgroundColor: 'gray' }} />
+      )}
+      <Text
+        style={{
+          color: 'white',
+          fontSize: 12,
+          textAlign: 'center',
+        }}
+        numberOfLines={2}
+      >
+        {item.name}
+      </Text>
+    </TouchableOpacity>
+  );
+
   return (
     <View
       style={{
         flex: 1,
-        backgroundColor: 'black',
+        backgroundColor: 'transparent',
         paddingTop: insets.top,
         paddingBottom: insets.bottom,
         paddingLeft: insets.left,
         paddingRight: insets.right,
       }}
     >
-
-      <ScrollView>
-
-        {apps.map((app) => (
-          <Text
-            key={app.packageName}
-            style={{
-              color: 'white',
-              fontSize: 18,
-              marginBottom: 10,
-            }}
-          >
-            {app.name}
-          </Text>
-        ))}
-
-      </ScrollView>
-
+      <FlatList
+        data={apps}
+        keyExtractor={(item) => item.packageName}
+        numColumns={numColumns}
+        renderItem={renderItem}
+        contentContainerStyle={{
+          paddingTop: insets.top,
+          paddingBottom: insets.bottom,
+          paddingLeft: insets.left,
+          paddingRight: insets.right,
+        }}
+      />
     </View>
   );
 }
