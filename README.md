@@ -68,26 +68,6 @@ npm run dev
 
 This builds and installs the debug APK on a connected device or running emulator.
 
-### 5. Set as default launcher
-
-Once installed, press the Home button on your device. Android will prompt you to choose a default launcher — select **NobaraLauncher**.
-
-## Build for Release
-
-Generate a release bundle:
-
-```sh
-npm run build:bundle
-```
-
-Build a release APK:
-
-```sh
-npm run build:apk
-```
-
-The output APK will be located at `android/app/build/outputs/apk/release/`.
-
 ## Project Structure
 
 ```
@@ -109,11 +89,7 @@ NobaraLauncher/
 
 ## How It Works
 
-1. **App Discovery** — On launch, the `AppsModule` Kotlin native module queries the Android `PackageManager` for all apps with a `CATEGORY_LAUNCHER` intent, extracts their names, package names, and icons.
-2. **Icon Caching** — Each app's icon drawable is converted to a bitmap and saved as a PNG in the app's cache directory. Subsequent loads read directly from cache.
-3. **Home Screen** — The main screen displays a date widget and a dock with quick-launch icons. The entire screen responds to upward swipe gestures.
-4. **App Drawer** — Swiping up triggers a spring-animated bottom sheet that slides over the home screen. The sheet contains a search bar placeholder and a scrollable grid of all installed apps.
-5. **App Launch** — Tapping an app icon calls `AppsModule.launchApp()`, which resolves the launch intent and starts the activity.
+A Kotlin native module (`AppsModule`) queries the Android `PackageManager` for all launcher apps and caches their icons as PNGs. The React Native UI renders a home screen with a date widget and a dock. Swiping up opens a spring-animated app drawer that displays all apps in a scrollable grid. Tapping an app launches it via an Android intent.
 
 ## Contributing
 
