@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   Animated,
   AppState,
@@ -28,9 +28,29 @@ type AppInfo = {
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const NUM_COLUMNS = 4;
 const DOCK_APPS_MAX = 4;
+const ITEM_WIDTH = SCREEN_WIDTH / NUM_COLUMNS;
+const ITEM_HEIGHT = 90; // Estimated height for getItemLayout
 
 const SNAP_OPEN   = 0;                 // sheet top edge at y=0 (full screen)
 const SNAP_CLOSED = SCREEN_HEIGHT;     // sheet fully off-screen below
+
+const AppItem = React.memo(({ item, onPress }: { item: AppInfo, onPress: (pkg: string) => void }) => (
+  <TouchableOpacity
+    style={styles.drawerItem}
+    onPress={() => onPress(item.packageName)}
+    activeOpacity={0.75}
+  >
+    {item.iconUri
+      ? <Image
+          source={{ uri: `file://${item.iconUri}` }}
+          style={styles.appIcon}
+          resizeMode="contain"
+          fadeDuration={0}
+        />
+      : <View style={[styles.appIcon, styles.iconPlaceholder]} />}
+    <Text style={styles.appLabel} numberOfLines={1}>{item.name}</Text>
+  </TouchableOpacity>
+));
 
 export default function AppContent() {
   const insets = useSafeAreaInsets();
@@ -59,7 +79,12 @@ export default function AppContent() {
       try {
         const { AppsModule } = NativeModules;
         const installedApps = await AppsModule.getInstalledApps();
-        setApps(installedApps);
+        // Sorting in background thread on native side is better,
+        // but if not, sorting once here is fine.
+        const sorted = (installedApps as AppInfo[]).sort((a, b) =>
+          a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+        );
+        setApps(sorted);
       } catch (e) {
         console.error(e);
       }
@@ -67,14 +92,18 @@ export default function AppContent() {
     loadApps();
   }, []);
 
+  const sortedApps = apps; // Already sorted in useEffect
+
+  const dockApps = useMemo(() => apps.slice(0, DOCK_APPS_MAX), [apps]);
+
   // ── Snap ─────────────────────────────────────────────────────────────────
   const snapTo = useCallback(
     (toValue: number) => {
       Animated.spring(sheetY, {
         toValue,
         useNativeDriver: true,
-        damping: 28,
-        stiffness: 280,
+        damping: 30,
+        stiffness: 300,
         mass: 0.8,
       }).start();
     },
@@ -133,32 +162,34 @@ export default function AppContent() {
       },
     });
 
-  // Handle bar: claims all vertical drags
   const handlePanResponder = useRef(makePanHandlers({ alwaysClaim: true })).current;
-  // Home screen: only claims upward swipes
   const homePanResponder   = useRef(makePanHandlers({ alwaysClaim: false })).current;
 
   // ── FlatList pull-down-to-close ───────────────────────────────────────────
-  const onScrollBeginDrag = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+  const onScrollBeginDrag = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     dragStartedAtTop.current = e.nativeEvent.contentOffset.y <= 0;
-  };
-  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+  }, []);
+
+  const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     scrollY.current = e.nativeEvent.contentOffset.y;
-  };
-  const onScrollEndDrag = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+  }, []);
+
+  const onScrollEndDrag = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const y   = e.nativeEvent.contentOffset.y;
     const vel = e.nativeEvent.velocity?.y ?? 0;
     if (dragStartedAtTop.current && y <= 2 && vel > 0.3) closeSheet();
-  };
+  }, [closeSheet]);
 
-  const launchApp = (packageName: string) => {
+  const launchApp = useCallback((packageName: string) => {
     NativeModules.AppsModule?.launchApp(packageName).catch((err: any) =>
       console.error('Failed to launch app:', err)
     );
-  };
+  }, []);
 
-  const dockApps   = apps.slice(0, DOCK_APPS_MAX);
-  const sortedApps = [...apps].sort((a, b) => a.name.localeCompare(b.name));
+  const handleAppPress = useCallback((packageName: string) => {
+    closeSheet();
+    setTimeout(() => launchApp(packageName), 150);
+  }, [closeSheet, launchApp]);
 
   const backdropOpacity = sheetY.interpolate({
     inputRange: [SNAP_OPEN, SNAP_CLOSED],
@@ -166,18 +197,9 @@ export default function AppContent() {
     extrapolate: 'clamp',
   });
 
-  const renderItem = ({ item }: { item: AppInfo }) => (
-    <TouchableOpacity
-      style={styles.drawerItem}
-      onPress={() => { closeSheet(); setTimeout(() => launchApp(item.packageName), 280); }}
-      activeOpacity={0.75}
-    >
-      {item.iconUri
-        ? <Image source={{ uri: `file://${item.iconUri}` }} style={styles.appIcon} resizeMode="contain" />
-        : <View style={[styles.appIcon, styles.iconPlaceholder]} />}
-      <Text style={styles.appLabel} numberOfLines={1}>{item.name}</Text>
-    </TouchableOpacity>
-  );
+  const renderItem = useCallback(({ item }: { item: AppInfo }) => (
+    <AppItem item={item} onPress={handleAppPress} />
+  ), [handleAppPress]);
 
   return (
     <View style={styles.root}>
@@ -188,7 +210,6 @@ export default function AppContent() {
         style={[styles.home, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
         {...homePanResponder.panHandlers}
       >
-        {/* Date widget */}
         <View style={styles.dateWidget}>
           <Text style={styles.dateText}>
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
@@ -197,11 +218,8 @@ export default function AppContent() {
 
         <View style={{ flex: 1 }} />
 
-        {/* Dock — swipe up anywhere on it opens the sheet */}
         <View style={styles.dockWrapper}>
-          {/* Invisible swipe-up zone above the dock */}
           <View style={styles.dockSwipeZone} {...homePanResponder.panHandlers} />
-
           <View style={styles.dock}>
             {dockApps.map(app => (
               <TouchableOpacity
@@ -219,28 +237,23 @@ export default function AppContent() {
         </View>
       </View>
 
-      {/* ── BACKDROP (only rendered when sheet is in motion / open) ── */}
       <Animated.View
         style={[styles.backdrop, { opacity: backdropOpacity }]}
         pointerEvents="none"
       />
 
-      {/* ── BOTTOM SHEET ── */}
       <Animated.View
         style={[styles.sheet, { transform: [{ translateY: sheetY }] }]}
       >
-        {/* Drag handle — padded by insets.top so it clears the status bar when fully open */}
         <View style={[styles.handleArea, { paddingTop: insets.top + 14 }]} {...handlePanResponder.panHandlers}>
           <View style={styles.handle} />
         </View>
 
-        {/* Search bar */}
         <View style={styles.searchBar}>
           <Text style={styles.searchIcon}>🔍</Text>
           <Text style={styles.searchPlaceholder}>Search apps</Text>
         </View>
 
-        {/* App grid */}
         <FlatList
           data={sortedApps}
           keyExtractor={item => item.packageName}
@@ -252,21 +265,26 @@ export default function AppContent() {
           onScroll={onScroll}
           onScrollBeginDrag={onScrollBeginDrag}
           onScrollEndDrag={onScrollEndDrag}
+          getItemLayout={(_, index) => ({
+            length: ITEM_HEIGHT,
+            offset: ITEM_HEIGHT * Math.floor(index / NUM_COLUMNS),
+            index,
+          })}
+          initialNumToRender={20}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={true}
         />
       </Animated.View>
     </View>
   );
 }
 
-const ITEM_WIDTH = SCREEN_WIDTH / NUM_COLUMNS;
-
 const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: 'transparent',
   },
-
-  // ── HOME ──
   home: {
     ...StyleSheet.absoluteFill,
   },
@@ -280,12 +298,9 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     letterSpacing: 0.2,
   },
-
-  // ── DOCK ──
   dockWrapper: {
     paddingBottom: 12,
   },
-  // Invisible tall hit zone so upward swipes register before touching dock icons
   dockSwipeZone: {
     height: 32,
   },
@@ -308,20 +323,16 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: 14,
   },
-
-  // ── BACKDROP ──
   backdrop: {
     ...StyleSheet.absoluteFill,
     backgroundColor: '#000',
   },
-
-  // ── SHEET ──
   sheet: {
     position: 'absolute',
     left: 0,
     right: 0,
     top: 0,
-    height: SCREEN_HEIGHT,          // full-height so nothing peeks through
+    height: SCREEN_HEIGHT,
     backgroundColor: '#1C1B1F',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
@@ -331,8 +342,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 16,
   },
-
-  // ── HANDLE ──
   handleArea: {
     alignItems: 'center',
     paddingBottom: 10,
@@ -343,8 +352,6 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: 'rgba(255,255,255,0.28)',
   },
-
-  // ── SEARCH ──
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -363,14 +370,13 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.4)',
     fontSize: 14,
   },
-
-  // ── GRID ──
   grid: {
     paddingHorizontal: 4,
     paddingTop: 4,
   },
   drawerItem: {
     width: ITEM_WIDTH,
+    height: ITEM_HEIGHT,
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 4,
