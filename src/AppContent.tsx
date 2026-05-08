@@ -29,10 +29,10 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const NUM_COLUMNS = 4;
 const DOCK_APPS_MAX = 4;
 const ITEM_WIDTH = SCREEN_WIDTH / NUM_COLUMNS;
-const ITEM_HEIGHT = 90; // Estimated height for getItemLayout
+const ITEM_HEIGHT = 90;
 
-const SNAP_OPEN   = 0;                 // sheet top edge at y=0 (full screen)
-const SNAP_CLOSED = SCREEN_HEIGHT;     // sheet fully off-screen below
+const SNAP_OPEN   = 0;
+const SNAP_CLOSED = SCREEN_HEIGHT;
 
 const AppItem = React.memo(({ item, onPress }: { item: AppInfo, onPress: (pkg: string) => void }) => (
   <TouchableOpacity
@@ -56,15 +56,13 @@ export default function AppContent() {
   const insets = useSafeAreaInsets();
   const [apps, setApps] = useState<AppInfo[]>([]);
 
-  // sheetY = translateY of the sheet; SNAP_CLOSED means completely hidden below
   const sheetY    = useRef(new Animated.Value(SNAP_CLOSED)).current;
   const currentY  = useRef(SNAP_CLOSED);
   const isOpen    = useRef(false);
   const dragOffset = useRef(SNAP_CLOSED);
 
-  // FlatList scroll tracking
   const scrollY           = useRef(0);
-  const dragStartedAtTop  = useRef(false);
+  const dragStartedAtTop  = useRef(true);
 
   useEffect(() => {
     const id = sheetY.addListener(({ value }) => {
@@ -79,8 +77,6 @@ export default function AppContent() {
       try {
         const { AppsModule } = NativeModules;
         const installedApps = await AppsModule.getInstalledApps();
-        // Sorting in background thread on native side is better,
-        // but if not, sorting once here is fine.
         const sorted = (installedApps as AppInfo[]).sort((a, b) =>
           a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
         );
@@ -92,18 +88,17 @@ export default function AppContent() {
     loadApps();
   }, []);
 
-  const sortedApps = apps; // Already sorted in useEffect
+  const sortedApps = apps;
 
   const dockApps = useMemo(() => apps.slice(0, DOCK_APPS_MAX), [apps]);
 
-  // ── Snap ─────────────────────────────────────────────────────────────────
   const snapTo = useCallback(
     (toValue: number) => {
       Animated.spring(sheetY, {
         toValue,
         useNativeDriver: true,
-        damping: 30,
-        stiffness: 300,
+        damping: 32,
+        stiffness: 320,
         mass: 0.8,
       }).start();
     },
@@ -113,17 +108,15 @@ export default function AppContent() {
   const openSheet  = useCallback(() => snapTo(SNAP_OPEN),   [snapTo]);
   const closeSheet = useCallback(() => snapTo(SNAP_CLOSED), [snapTo]);
 
-  // ── Back button ───────────────────────────────────────────────────────────
   useEffect(() => {
     const onBack = () => {
       if (isOpen.current) { closeSheet(); return true; }
-      return true; // prevent launcher exit
+      return true;
     };
     const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
     return () => sub.remove();
   }, [closeSheet]);
 
-  // ── Home button via AppState ──────────────────────────────────────────────
   useEffect(() => {
     let prev = AppState.currentState;
     const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
@@ -135,49 +128,83 @@ export default function AppContent() {
     return () => sub.remove();
   }, [closeSheet]);
 
-  // ── Shared pan logic (used by handle + home swipe-up) ────────────────────
-  const makePanHandlers = (opts: { alwaysClaim: boolean }) =>
+  const handlePanMove = (_: any, g: any) => {
+    const next = Math.max(SNAP_OPEN, Math.min(SNAP_CLOSED, dragOffset.current + g.dy));
+    sheetY.setValue(next);
+  };
+
+  const handlePanRelease = (_: any, g: any) => {
+    const vel = g.vy;
+    if (vel > 0.4) closeSheet();
+    else if (vel < -0.4) openSheet();
+    else {
+      const mid = (SNAP_OPEN + SNAP_CLOSED) / 2;
+      currentY.current < mid ? openSheet() : closeSheet();
+    }
+  };
+
+  const homePanResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => opts.alwaysClaim,
       onMoveShouldSetPanResponder: (_, g) =>
-        opts.alwaysClaim
-          ? Math.abs(g.dy) > 4
-          : g.dy < -8 && Math.abs(g.dy) > Math.abs(g.dx), // upward only on home
+        g.dy < -8 && Math.abs(g.dy) > Math.abs(g.dx),
       onPanResponderGrant: () => {
         dragOffset.current = currentY.current;
         sheetY.stopAnimation();
       },
-      onPanResponderMove: (_, g) => {
-        const next = Math.max(SNAP_OPEN, Math.min(SNAP_CLOSED, dragOffset.current + g.dy));
-        sheetY.setValue(next);
+      onPanResponderMove: handlePanMove,
+      onPanResponderRelease: handlePanRelease,
+    })
+  ).current;
+
+  const handlePanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        dragOffset.current = currentY.current;
+        sheetY.stopAnimation();
       },
-      onPanResponderRelease: (_, g) => {
-        const vel = g.vy;
-        if      (vel >  0.8) closeSheet();
-        else if (vel < -0.8) openSheet();
-        else {
-          const mid = (SNAP_OPEN + SNAP_CLOSED) / 2;
-          currentY.current < mid ? openSheet() : closeSheet();
+      onPanResponderMove: handlePanMove,
+      onPanResponderRelease: handlePanRelease,
+    })
+  ).current;
+
+  const sheetPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponderCapture: (_, g) => {
+        const isVertical = Math.abs(g.dy) > Math.abs(g.dx);
+        // Capture if swiping DOWN and at the TOP of the scrollable list
+        // This allows pulling the sheet down from anywhere on its surface.
+        if (isVertical && g.dy > 8 && scrollY.current <= 0) {
+          return true;
         }
+        return false;
       },
-    });
-
-  const handlePanResponder = useRef(makePanHandlers({ alwaysClaim: true })).current;
-  const homePanResponder   = useRef(makePanHandlers({ alwaysClaim: false })).current;
-
-  // ── FlatList pull-down-to-close ───────────────────────────────────────────
-  const onScrollBeginDrag = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    dragStartedAtTop.current = e.nativeEvent.contentOffset.y <= 0;
-  }, []);
+      onPanResponderGrant: () => {
+        dragOffset.current = currentY.current;
+        sheetY.stopAnimation();
+      },
+      onPanResponderMove: handlePanMove,
+      onPanResponderRelease: handlePanRelease,
+      onPanResponderTerminationRequest: () => false,
+    })
+  ).current;
 
   const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     scrollY.current = e.nativeEvent.contentOffset.y;
   }, []);
 
+  const onScrollBeginDrag = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    dragStartedAtTop.current = e.nativeEvent.contentOffset.y <= 0;
+  }, []);
+
   const onScrollEndDrag = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const y   = e.nativeEvent.contentOffset.y;
-    const vel = e.nativeEvent.velocity?.y ?? 0;
-    if (dragStartedAtTop.current && y <= 2 && vel > 0.3) closeSheet();
+    const y = e.nativeEvent.contentOffset.y;
+    const velocityY = e.nativeEvent.velocity?.y ?? 0;
+    // Extra guard: if user flicks down fast while at top, close it
+    if (dragStartedAtTop.current && y <= 0 && velocityY < -0.5) {
+      closeSheet();
+    }
   }, [closeSheet]);
 
   const launchApp = useCallback((packageName: string) => {
@@ -205,7 +232,6 @@ export default function AppContent() {
     <View style={styles.root}>
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
 
-      {/* ── HOME SCREEN ── */}
       <View
         style={[styles.home, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
         {...homePanResponder.panHandlers}
@@ -244,6 +270,7 @@ export default function AppContent() {
 
       <Animated.View
         style={[styles.sheet, { transform: [{ translateY: sheetY }] }]}
+        {...sheetPanResponder.panHandlers}
       >
         <View style={[styles.handleArea, { paddingTop: insets.top + 14 }]} {...handlePanResponder.panHandlers}>
           <View style={styles.handle} />
@@ -345,6 +372,7 @@ const styles = StyleSheet.create({
   handleArea: {
     alignItems: 'center',
     paddingBottom: 10,
+    zIndex: 10,
   },
   handle: {
     width: 32,
