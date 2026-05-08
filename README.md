@@ -16,18 +16,6 @@
 
 ---
 
-## Features
-
-- **Home Screen Replacement** — Registers as a default home launcher via `CATEGORY_HOME` intent filter, so it can fully replace your stock launcher.
-- **Swipe-Up App Drawer** — A full-screen bottom sheet with spring-physics animations. Swipe up from the home screen to open, swipe down or fling to close.
-- **Alphabetically Sorted App Grid** — All installed apps displayed in a responsive 4-column grid, sorted A-Z.
-- **Dock** — Quick-access dock at the bottom of the home screen showing your first 4 apps for one-tap launching.
-- **Date Widget** — Clean, minimal date display on the home screen.
-- **Native App Launching** — A custom Kotlin native module (`AppsModule`) queries all installed apps and launches them directly via Android intents.
-- **Icon Caching** — App icons are extracted and cached as PNGs on first load for fast, flicker-free rendering.
-- **Translucent Status Bar** — Fully immersive UI with a transparent, translucent status bar.
-- **Back Button Handling** — Hardware back press is intercepted to prevent accidental exits; it closes the app drawer when open.
-
 ## Tech Stack
 
 | Layer | Technology |
