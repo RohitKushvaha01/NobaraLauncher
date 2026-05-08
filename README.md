@@ -1,97 +1,100 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+<p align="center">
+  <img src="play_store_512.png" width="128" height="128" alt="Nobara Launcher icon" />
+</p>
 
-# Getting Started
+<h1 align="center">Nobara Launcher</h1>
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+<p align="center">
+  A minimal, gesture-driven Android home screen launcher built with React Native.
+</p>
 
-## Step 1: Start Metro
+<p align="center">
+  <img src="https://img.shields.io/badge/platform-Android-3ddc84?logo=android&logoColor=white" alt="Android" />
+  <img src="https://img.shields.io/badge/React%20Native-0.85-61dafb?logo=react&logoColor=white" alt="React Native" />
+  <img src="https://img.shields.io/badge/TypeScript-5.x-3178c6?logo=typescript&logoColor=white" alt="TypeScript" />
+</p>
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+---
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| UI | [React Native](https://reactnative.dev) 0.85 + TypeScript |
+| Animations | React Native `Animated` API with spring physics |
+| Gestures | `PanResponder` for swipe detection and sheet dragging |
+| Native Bridge | Custom Kotlin module (`AppsModule`) via React Native's `NativeModules` |
+| Safe Areas | [`react-native-safe-area-context`](https://github.com/th3rdwave/react-native-safe-area-context) |
+| Build | Gradle + Metro bundler |
+
+## Prerequisites
+
+- **Node.js** >= 22.11.0
+- **npm** (comes with Node.js)
+- **Android Studio** with Android SDK configured
+- **Java Development Kit (JDK)** 17+
+- A physical Android device or Android emulator
+
+> Make sure you have completed the [React Native environment setup](https://reactnative.dev/docs/set-up-your-environment) before proceeding.
+
+## Getting Started
+
+### 1. Clone the repository
 
 ```sh
-# Using npm
+git clone https://github.com/RohitKushvaha01/NobaraLauncher.git
+cd NobaraLauncher
+```
+
+### 2. Install dependencies
+
+```sh
+npm install
+```
+
+### 3. Start the Metro bundler
+
+```sh
 npm start
-
-# OR using Yarn
-yarn start
 ```
 
-## Step 2: Build and run your app
+### 4. Build and run on Android
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
-
-### Android
+In a separate terminal:
 
 ```sh
-# Using npm
-npm run android
-
-# OR using Yarn
-yarn android
+npm run dev
 ```
 
-### iOS
+This builds and installs the debug APK on a connected device or running emulator.
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
+## Project Structure
 
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
-
-```sh
-bundle install
+```
+NobaraLauncher/
+├── src/
+│   ├── App.tsx              # Root component (SafeAreaProvider, StatusBar, back handler)
+│   └── AppContent.tsx       # Main launcher UI (home screen, dock, app drawer)
+├── android/
+│   └── app/src/main/java/com/nobaralauncher/
+│       ├── AppsModule.kt    # Native module: queries installed apps & launches them
+│       ├── AppsPackage.kt   # React Native package registration
+│       ├── MainActivity.kt  # Main activity entry point
+│       └── MainApplication.kt
+├── index.js                 # React Native entry point
+├── app.json                 # App configuration
+├── package.json
+└── tsconfig.json
 ```
 
-Then, and every time you update your native dependencies, run:
+## How It Works
 
-```sh
-bundle exec pod install
-```
+A Kotlin native module (`AppsModule`) queries the Android `PackageManager` for all launcher apps and caches their icons as PNGs. The React Native UI renders a home screen with a date widget and a dock. Swiping up opens a spring-animated app drawer that displays all apps in a scrollable grid. Tapping an app launches it via an Android intent.
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
+## Contributing
 
-```sh
-# Using npm
-npm run ios
+Contributions are welcome! Feel free to open an issue or submit a pull request.
 
-# OR using Yarn
-yarn ios
-```
+## License
 
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
-
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
-
-## Step 3: Modify your app
-
-Now that you have successfully run the app, let's make changes!
-
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
-
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
-
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+This project is licensed under the [MIT License](LICENSE).
